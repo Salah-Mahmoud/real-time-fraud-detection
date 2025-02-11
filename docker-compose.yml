@@ -1,0 +1,212 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - '2181:2181'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "echo srvr | nc localhost 2181" ]
+      start_period: 10s
+      retries: 20
+      interval: 10s
+    networks:
+      - fraud-network
+
+  broker:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: broker
+    container_name: broker
+    ports:
+      - '29092:29092'
+      - '9092:9092'
+      - '9101:9101'
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: nc -z localhost 9092 || exit -1
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    networks:
+      - fraud-network
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  control-center:
+    image: confluentinc/cp-enterprise-control-center:7.4.0
+    hostname: control-center
+    container_name: control-center
+    depends_on:
+      broker:
+        condition: service_healthy
+    ports:
+      - "9021:9021"
+    environment:
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONTROL_CENTER_REPLICATION_FACTOR: 1
+      CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+      CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+      CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+      CONFLUENT_METRICS_ENABLE: 'false'
+      PORT: 9021
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - fraud-network
+
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    hostname: postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: fraud_detection
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U admin -d fraud_detection" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fraud-network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - fraud-network
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+  debezium:
+    image: debezium/connect:3.0.0.Final
+    container_name: debezium
+    hostname: debezium
+    depends_on:
+      postgres:
+        condition: service_healthy
+      broker:
+        condition: service_healthy
+    ports:
+      - '8093:8083'
+    environment:
+      BOOTSTRAP_SERVERS: broker:29092
+      CONNECT_REST_ADVERTISED_HOST_NAME: debezium
+      GROUP_ID: "1"
+      CONFIG_STORAGE_TOPIC: connect_configs
+      STATUS_STORAGE_TOPIC: connect_statuses
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      ENABLE_DEBEZIUM_SCRIPTING: 'true'
+    healthcheck:
+      test: [ "CMD", "curl", "--silent", "--fail", "http://localhost:8083/health" ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fraud-network
+    volumes:
+      - debezium_data:/kafka/data
+
+  debezium-ui:
+    image: debezium/debezium-ui:latest
+    container_name: debezium-ui
+    hostname: debezium-ui
+    depends_on:
+      debezium:
+        condition: service_healthy
+    ports:
+      - '9090:8080'
+    environment:
+      KAFKA_CONNECT_URIS: http://debezium:8083
+    networks:
+      - fraud-network
+
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_WEBUI_PORT=8081
+    ports:
+      - "8081:8081"
+      - "7077:7077"
+    volumes:
+      - ./spark_data:/opt/bitnami/spark/spark-data
+      - ./spark_apps:/opt/bitnami/spark/spark-apps
+    networks:
+      - fraud-network
+
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+    volumes:
+      - ./spark_data:/opt/bitnami/spark/spark-data
+      - ./spark_apps:/opt/bitnami/spark/spark-apps
+    depends_on:
+      - spark-master
+    networks:
+      - fraud-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: postgres:5432
+      GF_DATABASE_NAME: fraud_detection
+      GF_DATABASE_USER: admin
+      GF_DATABASE_PASSWORD: admin
+    ports:
+     - '3000:3000'
+    volumes:
+     - grafana_storage:/var/lib/grafana
+    networks:
+      - fraud-network
+
+networks:
+  fraud-network:
+
+volumes:
+  kafka_data:
+  postgres_data:
+  pgadmin_data:
+  debezium_data:
+  grafana_storage:

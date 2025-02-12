@@ -46,8 +46,7 @@ services:
       retries: 10
     networks:
       - fraud-network
-    volumes:
-      - kafka_data:/var/lib/kafka/data
+
 
   control-center:
     image: confluentinc/cp-enterprise-control-center:7.4.0
@@ -136,8 +135,6 @@ services:
       retries: 5
     networks:
       - fraud-network
-    volumes:
-      - debezium_data:/kafka/data
 
   debezium-ui:
     image: debezium/debezium-ui:latest
@@ -158,6 +155,8 @@ services:
     container_name: spark-master
     environment:
       - SPARK_MODE=master
+      - SPARK_MASTER_HOST=spark-master
+      - SPARK_MASTER_PORT=7077
       - SPARK_MASTER_WEBUI_PORT=8081
     ports:
       - "8081:8081"
@@ -184,6 +183,7 @@ services:
     networks:
       - fraud-network
 
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -196,8 +196,6 @@ services:
       GF_DATABASE_PASSWORD: admin
     ports:
      - '3000:3000'
-    volumes:
-     - grafana_storage:/var/lib/grafana
     networks:
       - fraud-network
 
@@ -205,8 +203,5 @@ networks:
   fraud-network:
 
 volumes:
-  kafka_data:
   postgres_data:
   pgadmin_data:
-  debezium_data:
-  grafana_storage:

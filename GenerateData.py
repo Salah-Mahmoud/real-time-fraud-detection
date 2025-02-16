@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS transaction (
 """
 
 CREATE_Second_TABLE_QUERY = """
-CREATE TABLE IF NOT EXISTS transaction (
+CREATE TABLE IF NOT EXISTS processed_transactions (
     trans_date_trans_time TIMESTAMP WITHOUT TIME ZONE,
     cc_num BIGINT,
     merchant VARCHAR(255),

@@ -49,7 +49,7 @@ services:
 
 
   control-center:
-    image: confluentinc/cp-enterprise-control-center:7.4.0
+    image: confluentinc/cp-enterprise-control-center:latest
     hostname: control-center
     container_name: control-center
     depends_on:
@@ -58,15 +58,16 @@ services:
     ports:
       - "9021:9021"
     environment:
-      CONTROL_CENTER_BOOTSTRAP_SERVERS: 'broker:29092'
+      CONTROL_CENTER_BOOTSTRAP_SERVERS: "broker:29092"
+      CONTROL_CENTER_ZOOKEEPER_CONNECT: "zookeeper:2181"
       CONTROL_CENTER_REPLICATION_FACTOR: 1
       CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
       CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
       CONFLUENT_METRICS_TOPIC_REPLICATION: 1
-      CONFLUENT_METRICS_ENABLE: 'false'
+      CONFLUENT_METRICS_ENABLE: "false"
       PORT: 9021
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092"]
+      test: [ "CMD", "bash", "-c", "echo > /dev/tcp/localhost/9092" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -92,6 +93,8 @@ services:
       - fraud-network
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres_init.sh:/docker-entrypoint-initdb.d/postgres_init.sh
+
 
   pgadmin:
     image: dpage/pgadmin4:latest
@@ -158,6 +161,7 @@ services:
       - SPARK_MASTER_HOST=spark-master
       - SPARK_MASTER_PORT=7077
       - SPARK_MASTER_WEBUI_PORT=8081
+    entrypoint: [ "/bin/sh", "-c", "pip install numpy && exec /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/spark/bin/spark-class org.apache.spark.deploy.master.Master" ]
     ports:
       - "8081:8081"
       - "7077:7077"
@@ -175,6 +179,7 @@ services:
       - SPARK_MASTER_URL=spark://spark-master:7077
       - SPARK_WORKER_MEMORY=2G
       - SPARK_WORKER_CORES=2
+    entrypoint: [ "/bin/sh", "-c", "pip install numpy && exec /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077" ]
     volumes:
       - ./spark_data:/opt/bitnami/spark/spark-data
       - ./spark_apps:/opt/bitnami/spark/spark-apps
@@ -182,8 +187,6 @@ services:
       - spark-master
     networks:
       - fraud-network
-
-
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -195,7 +198,7 @@ services:
       GF_DATABASE_USER: admin
       GF_DATABASE_PASSWORD: admin
     ports:
-     - '3000:3000'
+      - '3000:3000'
     networks:
       - fraud-network
 

@@ -95,7 +95,7 @@ def generate_random_transaction():
         round(fake.longitude(), 6),
         random.randint(500, 1000000),
         fake.job(),
-        fake.date_of_birth(minimum_age=18, maximum_age=90),
+        fake.date_object(),
         fake.uuid4(),
         unix_time,
         round(fake.latitude(), 6),
@@ -120,7 +120,7 @@ def main():
             cursor.execute(INSERT_QUERY, transaction)
             conn.commit()
             print("Inserted transaction:", transaction)
-            time.sleep(5)
+            time.sleep(15)
 
     except Exception as e:
         print("Error:", e)

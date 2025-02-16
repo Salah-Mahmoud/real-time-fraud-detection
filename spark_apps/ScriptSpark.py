@@ -1,10 +1,10 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col
+from pyspark.sql.functions import from_json, col, lit, from_unixtime, date_add, to_date
 from pyspark.sql.types import *
 from pyspark.ml import PipelineModel
 
 after_schema = StructType([
-    StructField("trans_date_trans_time", TimestampType(), True),
+    StructField("trans_date_trans_time", LongType(), True),
     StructField("cc_num", LongType(), True),
     StructField("merchant", StringType(), True),
     StructField("category", StringType(), True),
@@ -20,7 +20,7 @@ after_schema = StructType([
     StructField("long", DoubleType(), True),
     StructField("city_pop", IntegerType(), True),
     StructField("job", StringType(), True),
-    StructField("dob", DateType(), True),
+    StructField("dob", LongType(), True),
     StructField("trans_num", StringType(), True),
     StructField("unix_time", LongType(), True),
     StructField("merch_lat", DoubleType(), True),
@@ -75,7 +75,6 @@ model_path = "/opt/bitnami/spark/spark-data/random_forest_model"
 pipeline_model_loaded = PipelineModel.load(model_path)
 
 
-
 def write_to_postgres(batch_df, batch_id):
     batch_df = batch_df.withColumn(
         "trans_date_trans_time",
@@ -108,6 +107,7 @@ def write_to_postgres(batch_df, batch_id):
         .option("driver", DB_CONFIG["properties"]["driver"]) \
         .mode("append") \
         .save()
+
 
 query = parsed_df.writeStream \
     .foreachBatch(write_to_postgres) \

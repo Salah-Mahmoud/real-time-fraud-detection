@@ -43,7 +43,6 @@ DB_CONFIG = {
     }
 }
 
-# Initialize Spark session
 spark = SparkSession.builder \
     .appName("KafkaTransactionConsumer") \
     .config("spark.jars.packages",

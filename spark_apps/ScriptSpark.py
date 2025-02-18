@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    from_json, col, lit, from_unixtime, date_add, to_date, monotonically_increasing_id
+    from_json, col, lit, from_unixtime, date_add, to_date, monotonically_increasing_id, concat_ws
 )
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, LongType, DateType
 from pyspark.ml import PipelineModel
@@ -77,6 +77,13 @@ fraud_detection_model = PipelineModel.load(MODEL_PATH)
 
 
 def write_to_postgres(batch_df, batch_id):
+    batch_df = batch_df.withColumn(
+        "full_name",
+        concat_ws(" ", col("first"), col("last"))
+    )
+
+    batch_df = batch_df.drop("first", "last")
+
     batch_df = batch_df.withColumn(
         "trans_date_trans_time",
         from_unixtime((col("trans_date_trans_time") / 1000000).cast("integer")).cast("timestamp")

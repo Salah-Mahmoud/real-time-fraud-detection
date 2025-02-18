@@ -47,8 +47,7 @@ CREATE TABLE IF NOT EXISTS processed_transactions (
     merchant VARCHAR(255),
     category VARCHAR(255),
     amt DOUBLE PRECISION,
-    first VARCHAR(255),
-    last VARCHAR(255),
+    full_name VARCHAR(510),  
     gender VARCHAR(10),
     street VARCHAR(255),
     city VARCHAR(255),
@@ -62,7 +61,8 @@ CREATE TABLE IF NOT EXISTS processed_transactions (
     trans_num VARCHAR(255),
     unix_time BIGINT,
     merch_lat DOUBLE PRECISION,
-    merch_long DOUBLE PRECISION
+    merch_long DOUBLE PRECISION,
+    is_fraud int
 );
 """
 

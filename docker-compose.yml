@@ -161,7 +161,7 @@ services:
       - SPARK_MASTER_HOST=spark-master
       - SPARK_MASTER_PORT=7077
       - SPARK_MASTER_WEBUI_PORT=8081
-    entrypoint: [ "/bin/sh", "-c", "pip install numpy && exec /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/spark/bin/spark-class org.apache.spark.deploy.master.Master" ]
+    entrypoint: [ "/bin/sh", "-c", "pip install numpy requests && exec /opt/bitnami/scripts/spark/entrypoint.sh /opt/bitnami/spark/bin/spark-class org.apache.spark.deploy.master.Master" ]
     ports:
       - "8081:8081"
       - "7077:7077"

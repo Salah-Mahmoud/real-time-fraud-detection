@@ -1,9 +1,12 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import from_json, col, lit, from_unixtime, date_add, to_date
-from pyspark.sql.types import *
+from pyspark.sql.functions import (
+    from_json, col, lit, from_unixtime, date_add, to_date, monotonically_increasing_id
+)
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, LongType, DateType
 from pyspark.ml import PipelineModel
+from utility import *
 
-after_schema = StructType([
+transaction_schema = StructType([
     StructField("trans_date_trans_time", LongType(), True),
     StructField("cc_num", LongType(), True),
     StructField("merchant", StringType(), True),
@@ -27,7 +30,7 @@ after_schema = StructType([
     StructField("merch_long", DoubleType(), True)
 ])
 
-kafka_input_config = {
+KAFKA_CONFIG = {
     "kafka.bootstrap.servers": "broker:29092",
     "subscribe": "cdc.public.transaction",
     "startingOffsets": "latest",
@@ -48,54 +51,63 @@ spark = SparkSession.builder \
     .config("spark.jars.packages",
             "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3,"
             "org.apache.kafka:kafka-clients:3.5.1,"
-            "org.postgresql:postgresql:42.7.1"
-            ) \
+            "org.postgresql:postgresql:42.7.1") \
     .getOrCreate()
 
-df = spark \
+raw_stream_df = spark \
     .readStream \
     .format("kafka") \
-    .options(**kafka_input_config) \
+    .options(**KAFKA_CONFIG) \
     .load() \
     .selectExpr("CAST(value AS STRING) as value")
 
-parsed_df = df.select(
+transactions_df = raw_stream_df.select(
     from_json(
         col("value"),
         StructType([
             StructField("payload", StructType([
-                StructField("after", after_schema, True)
+                StructField("after", transaction_schema, True)
             ]), True)
         ])
     ).alias("data")
 ).select("data.payload.after.*")
 
-model_path = "/opt/bitnami/spark/spark-data/random_forest_model"
-pipeline_model_loaded = PipelineModel.load(model_path)
+MODEL_PATH = "/opt/bitnami/spark/spark-data/random_forest_model"
+fraud_detection_model = PipelineModel.load(MODEL_PATH)
 
 
 def write_to_postgres(batch_df, batch_id):
     batch_df = batch_df.withColumn(
         "trans_date_trans_time",
-        from_unixtime(col("trans_date_trans_time") / 1000000).cast("timestamp")
+        from_unixtime((col("trans_date_trans_time") / 1000000).cast("integer")).cast("timestamp")
     )
 
     batch_df = batch_df.withColumn(
         "dob",
         to_date(date_add(lit("1970-01-01").cast(DateType()), col("dob").cast("int")))
     )
-    prediction_df = batch_df.select(
+
+    feature_df = batch_df.select(
         "amt", "lat", "long", "city_pop", "unix_time", "merch_lat", "merch_long"
     )
 
-    predictions = pipeline_model_loaded.transform(prediction_df)
+    predictions_df = fraud_detection_model.transform(feature_df)
 
-    predictions = predictions.withColumnRenamed("prediction", "is_fraud")
-
-    result_df = batch_df.join(
-        predictions.select("is_fraud"),
+    result_df = batch_df.withColumn("id", monotonically_increasing_id()).join(
+        predictions_df.withColumn("id", monotonically_increasing_id()).select("id",
+                                                                              col("prediction").alias("is_fraud")),
+        on="id",
         how="inner"
-    )
+    ).drop("id")
+
+    fraud_transactions = result_df.select("trans_num", "is_fraud").collect()
+
+    for row in fraud_transactions:
+        short_trans_num = "#" + row["trans_num"].split("-")[0]
+        if row["is_fraud"] == 1:
+            send_message(f"🔻 Please cancel this transaction {short_trans_num} because it is fraud.")
+        else:
+            send_message(f"🟢 Success: Transaction {short_trans_num} is valid.")
 
     result_df.write \
         .format("jdbc") \
@@ -108,7 +120,7 @@ def write_to_postgres(batch_df, batch_id):
         .save()
 
 
-query = parsed_df.writeStream \
+query = transactions_df.writeStream \
     .foreachBatch(write_to_postgres) \
     .outputMode("append") \
     .start()

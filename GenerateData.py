@@ -15,7 +15,7 @@ DB_CONFIG = {
 fake = Faker()
 
 CREATE_First_TABLE_QUERY = """
-CREATE TABLE IF NOT EXISTS transaction (
+CREATE TABLE IF NOT EXISTS transactions (
     trans_date_trans_time TIMESTAMP WITHOUT TIME ZONE,
     cc_num BIGINT,
     merchant VARCHAR(255),
@@ -120,7 +120,7 @@ def main():
             cursor.execute(INSERT_QUERY, transaction)
             conn.commit()
             print("Inserted transaction:", transaction)
-            time.sleep(15)
+            time.sleep(8)
 
     except Exception as e:
         print("Error:", e)

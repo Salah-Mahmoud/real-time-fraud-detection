@@ -1,7 +1,6 @@
 # Real-Time Fraud Detection System
 
-This project implements a **real-time fraud detection system** using a modern data engineering stack. The system ingests  transactions, processes them in real-time, and applies machine learning models to detect fraudulent activities.
-
+This system uses **Machine Learning** to classify transactions, sends alerts through **Telegram**, and presents data via a **Grafana** Dashboard.
 
 ## Table of Contents
 - [Tech Stack](#Tech-Stack)

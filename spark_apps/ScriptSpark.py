@@ -32,7 +32,7 @@ transaction_schema = StructType([
 
 KAFKA_CONFIG = {
     "kafka.bootstrap.servers": "broker:29092",
-    "subscribe": "cdc.public.transaction",
+    "subscribe": "cdc.public.transactions",
     "startingOffsets": "latest",
     "failOnDataLoss": "false"
 }
